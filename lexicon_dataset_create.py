@@ -1,77 +1,77 @@
+"""
+This script is used to convert the frequency dataset into a normalised dataset
+
+Issues: 
+    -- BUG: dataset must be opened in excel and the first column deleted as it is blank
+    -- FIXME: make the try except catch the specific exception
+"""
 import csv
+from decorators import timer
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#This script is used to convert the frequency dataset into a proper 
-#PLEASE NOTE, THERE IS A BUG THAT REQUIRES YOU TO OPEN THE DATASET IN EXCEL AND DELETE THE FIRST COLUMN AS IT IS BLANK
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+def read_data(file_path: str, delim: str = ',') -> list:
+    full_data = []
+    with open(file_path) as data_file:
+        reader = csv.reader(data_file, delimiter=delim)
+        for row in reader:
+            full_data.append(row)
 
+    return full_data
 
-#read the lexicon file into a list
-lexicon = []
-with open("D:/IS/lexicon.tsv") as tsvfile:
-  reader = csv.reader(tsvfile, delimiter='\t')
-  for row in reader:
-    lexicon.append(row)
+def write_data(file_path: str, height: int, width: int, Matrix: list, delim: str = ','):
+    with open(file_path, 'w') as file_obj:
+        for x in range(0, height):
+            line = ""
+            for y in range(0, (width - 1)):
+                line = f"{line}{delim}{Matrix[x][y]}"
+            file_obj.write(f"{line}\n")
 
+@timer
+def edit_lexicon(width: int, height: int, data_main: list, lexicon: list) -> list:
+    # dataset copy for manipulating
+    Matrix = [[0 for x in range(width)] for y in range(height)]
 
-#read the frequency dataset into a list
-reviews = []
-with open("D:/IS/csv/reviews_Video_Games_test.csv") as tsvfile:
-  reader = csv.reader(tsvfile, delimiter=',')
-  for row in reader:
-      reviews.append(row)
+    for x in range(0, (width - 1)):
+        feature_name = data_main[0][x]
+        for lexicon_instance in lexicon:
+            # check if the feature name is found within the lexicon (e.g. "game" has a weighting in the lexicon)
+            if feature_name in lexicon_instance:
+                Matrix = edit_instance(height, x, feature_name, data_main, lexicon_instance, Matrix)
+                # once word is found move onto the next one
+                break
+            else:
+                for y in range(0, height):
+                    Matrix[y][x] = 0
+            
+    # overwrite the feature names to the matrix for cases like "0" as a feature name where it would have been multiplied above
+    for x in range(0, (width - 1)):
+        feature_name = data_main[0][x]
+        Matrix[0][x] = feature_name
+    
+    return Matrix
 
+def edit_instance(height: int, x: int, feature_name: str, data_main: list, lexicon_instance: list, Matrix: list) -> list:
+    for y in range(0, height):
+        # try to multiply the current instances feature by the weighting from the lexicon and overwrite the matrix
+        try:
+            new_cell = float(data_main[y][x]) * float(lexicon_instance[1])
+            Matrix[y][x] = new_cell
+        # if the above failed then it is the features string name so it is just overwritten
+        # FIXME: add specific error handling
+        except:
+            Matrix[y][x] = feature_name
 
-#width and height of the dataset (2001 features by 5000 instances)
-counter = 0
-w,h = 2001, 5000;
-#create a blank dataset the size of the original
-Matrix = [[0 for x in range(w)] for y in range(h)]
+    return Matrix
 
+if __name__ == "__main__":
+    lex_path = "C:/Users/Erik/Documents/LocalSandbox/Sentiment-Analysis/Review_Dataset/Games_senti_lexicon.tsv"
+    review_path = "C:/Users/Erik/Documents/LocalSandbox/Sentiment-Analysis/Review_Dataset/reviews_Video_Games_train.csv"
+    out_path = "C:/Users/Erik/Documents/LocalSandbox/Sentiment-Analysis/Review_Dataset/lexicon_dataset_train.csv"
 
-#iterate through the features
-for x in range(0,2000):
-    #get feature name
-    feauture_name = reviews[0][x]
-    #iterate through each word in the lexicon
-    for lexicon_instance in lexicon:
-        #check if the feature name is found within the lexicon (e.g. "game" has a weighting in the lexicon)
-        if feauture_name in lexicon_instance:
-            #iterate through the instances of that feature
-            for y in range(0, 5000):
-                #try to multiply the current instances feature by the weighting from the lexicon and overwrite the matrix
-                try:
-                    new_cell = float(reviews[y][x]) * float(lexicon_instance[1])
-                    Matrix[y][x] = new_cell
-                #If the above failed then it is the features string name so it is just overwritten
-                except:
-                    Matrix[y][x] = feauture_name
-            #once the word is found, stop looking through the lexicon and move onto the next feature
-            break
-        else:
-            #set weighting of that feature to 0
-            for y in range(0, 5000):
-                Matrix[y][x] = 0
-            pass
+    lexicon = read_data(lex_path, delim='\t')
+    reviews = read_data(review_path)    # default delimiter is comma so don't need to set as the review file is .csv
 
+    width = 2001
+    height = 5000
 
-#overwrite the feature names to the matrix for cases like "0" as a feature name where it would have been multiplied above
-for x in range(0,2000):
-    feauture_name = reviews[0][x]
-    Matrix[0][x] = feauture_name
-
-
-#create the new dataset .csv file
-file_obj = open("D:/IS/lex_ds/lexicon_dataset_train.csv", "w")
-#iterate through the instances first
-for x in range(0,5000):
-    #create a line string whihch will store all values of that instance
-    line = ""
-    #iterate through each instance
-    for y in range(0,2000):
-        #append a comma and the next value in the csv file
-        line = line + "," + str(Matrix[x][y])
-    #write that instance to the file with a new line after
-    file_obj.write(line + "\n")
-#close the dataset file
-file_obj.close()
+    Matrix = edit_lexicon(width, height, reviews, lexicon)
+    write_data(out_path, height, width, Matrix)
